@@ -1,0 +1,4 @@
+*.log
+actions.log
+__pycache__/
+.DS_Store

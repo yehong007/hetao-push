@@ -1,0 +1,48 @@
+name: 企微定时推送
+
+on:
+  schedule:
+    - cron: "45 4 * * *"
+    - cron: "0 5 * * *"
+    - cron: "0 6 * * *"
+    - cron: "0 10 * * *"
+    - cron: "15 11 * * *"
+    - cron: "0 14 * * *"
+    - cron: "30 14 * * *"
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: "推送时段 (morning|noon-after|evening|night|night2|tcm)"
+        required: true
+        default: "tcm"
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set slot from cron
+        run: |
+          UTC_HOUR=$(date -u +%H)
+          UTC_MIN=$(date -u +%M)
+          SLOT=""
+          if [[ "$UTC_HOUR" == "04" && "$UTC_MIN" == "45" ]]; then SLOT="morning"; fi
+          if [[ "$UTC_HOUR" == "05" && "$UTC_MIN" == "00" ]]; then SLOT="noon-after"; fi
+          if [[ "$UTC_HOUR" == "06" && "$UTC_MIN" == "00" ]]; then SLOT="tcm"; fi
+          if [[ "$UTC_HOUR" == "10" && "$UTC_MIN" == "00" ]]; then SLOT="evening"; fi
+          if [[ "$UTC_HOUR" == "11" && "$UTC_MIN" == "15" ]]; then SLOT="tcm"; fi
+          if [[ "$UTC_HOUR" == "14" && "$UTC_MIN" == "00" ]]; then SLOT="night"; fi
+          if [[ "$UTC_HOUR" == "14" && "$UTC_MIN" == "30" ]]; then SLOT="night2"; fi
+          if [[ -z "$SLOT" && "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            SLOT="${{ github.event.inputs.slot }}"
+          fi
+          if [[ -z "$SLOT" ]]; then
+            echo "ERROR: 无法确定 slot"
+            exit 1
+          fi
+          echo "SLOT=$SLOT" >> $GITHUB_ENV
+          echo "本次推送 slot: $SLOT"
+      - name: Run push script
+        env:
+          WQ_WEBHOOK: ${{ secrets.WQ_WEBHOOK }}
+        run: python3 push_notice.py "$SLOT"

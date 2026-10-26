@@ -45,4 +45,4 @@ jobs:
       - name: Run push script
         env:
           WQ_WEBHOOK: ${{ secrets.WQ_WEBHOOK }}
-        run: python3 push_notice.py "$SLOT"
+        run: python3 push_notice.py "$SLOT" 

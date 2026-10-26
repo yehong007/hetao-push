@@ -2,6 +2,14 @@ name: 企微定时推送
 
 on:
   schedule:
+    # 注意：GitHub Actions cron 用 UTC 时间，北京 = UTC+8
+    # 北京时间 12:45 = UTC 04:45  morning
+    # 北京时间 13:00 = UTC 05:00  noon-after
+    # 北京时间 14:00 = UTC 06:00  tcm
+    # 北京时间 18:00 = UTC 10:00  evening
+    # 北京时间 19:15 = UTC 11:15  tcm
+    # 北京时间 22:00 = UTC 14:00  night
+    # 北京时间 22:30 = UTC 14:30  night2
     - cron: "45 4 * * *"
     - cron: "0 5 * * *"
     - cron: "0 6 * * *"
@@ -21,28 +29,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set slot from cron
+
+      - name: Determine slot
+        id: slot
         run: |
-          UTC_HOUR=$(date -u +%H)
-          UTC_MIN=$(date -u +%M)
           SLOT=""
-          if [[ "$UTC_HOUR" == "04" && "$UTC_MIN" == "45" ]]; then SLOT="morning"; fi
-          if [[ "$UTC_HOUR" == "05" && "$UTC_MIN" == "00" ]]; then SLOT="noon-after"; fi
-          if [[ "$UTC_HOUR" == "06" && "$UTC_MIN" == "00" ]]; then SLOT="tcm"; fi
-          if [[ "$UTC_HOUR" == "10" && "$UTC_MIN" == "00" ]]; then SLOT="evening"; fi
-          if [[ "$UTC_HOUR" == "11" && "$UTC_MIN" == "15" ]]; then SLOT="tcm"; fi
-          if [[ "$UTC_HOUR" == "14" && "$UTC_MIN" == "00" ]]; then SLOT="night"; fi
-          if [[ "$UTC_HOUR" == "14" && "$UTC_MIN" == "30" ]]; then SLOT="night2"; fi
+          case "${{ github.event.schedule }}" in
+            "45 4 * * *")  SLOT="morning" ;;
+            "0 5 * * *")   SLOT="noon-after" ;;
+            "0 6 * * *")   SLOT="tcm" ;;
+            "0 10 * * *")  SLOT="evening" ;;
+            "15 11 * * *") SLOT="tcm" ;;
+            "0 14 * * *")  SLOT="night" ;;
+            "30 14 * * *") SLOT="night2" ;;
+          esac
           if [[ -z "$SLOT" && "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             SLOT="${{ github.event.inputs.slot }}"
           fi
           if [[ -z "$SLOT" ]]; then
-            echo "ERROR: 无法确定 slot"
+            echo "ERROR: 无法确定 slot (schedule=${{ github.event.schedule }}, event=${{ github.event_name }})"
             exit 1
           fi
-          echo "SLOT=$SLOT" >> $GITHUB_ENV
-          echo "本次推送 slot: $SLOT"
+          echo "slot=$SLOT" >> "$GITHUB_OUTPUT"
+          echo "本次推送 slot: $SLOT (schedule=${{ github.event.schedule }}, event=${{ github.event_name }})"
+
       - name: Run push script
         env:
           WQ_WEBHOOK: ${{ secrets.WQ_WEBHOOK }}
-        run: python3 push_notice.py "$SLOT" 
+        run: python3 push_notice.py "${{ steps.slot.outputs.slot }}"
